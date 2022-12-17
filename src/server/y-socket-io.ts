@@ -36,6 +36,15 @@ export interface YSocketIOConfiguration {
    * @param handshake Provided from the handshake attribute of the socket io
    */
   authenticate?: (handshake: { [key: string]: any }) => Promise<boolean> | boolean
+  /**
+   * Callback to reject the client update.
+   *
+   *  It can be a promise and if it returns true, the update is rejected; otherwise, if it returns false, the update is allowed.
+   * @param doc Local state of the document
+   * @param update Incoming update
+   */
+  rejectUpdate?: (doc: Document, update: Uint8Array) => Promise<boolean> | boolean
+
 }
 
 /**
@@ -197,7 +206,8 @@ export class YSocketIO extends Observable<string> {
       syncStep2(Y.encodeStateAsUpdate(doc, new Uint8Array(stateVector)))
     })
 
-    socket.on('sync-update', (update: Uint8Array) => {
+    socket.on('sync-update', async (update: Uint8Array) => {
+      if((this.configuration?.rejectUpdate) != null && await this.configuration.rejectUpdate(doc,update)) return
       Y.applyUpdate(doc, update, null)
     })
   }
@@ -253,7 +263,8 @@ export class YSocketIO extends Observable<string> {
    * @param {Document} doc The document
    */
   private readonly startSynchronization = (socket: Socket, doc: Document): void => {
-    socket.emit('sync-step-1', Y.encodeStateVector(doc), (update: Uint8Array) => {
+    socket.emit('sync-step-1', Y.encodeStateVector(doc), async (update: Uint8Array) => {
+      if((this.configuration?.rejectUpdate) != null && await this.configuration.rejectUpdate(doc,update)) return
       Y.applyUpdate(doc, new Uint8Array(update), this)
     })
     socket.emit('awareness-update', AwarenessProtocol.encodeAwarenessUpdate(doc.awareness, Array.from(doc.awareness.getStates().keys())))
