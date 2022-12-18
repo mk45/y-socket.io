@@ -42,8 +42,9 @@ export interface YSocketIOConfiguration {
    *  It can be a promise and if it returns true, the update is rejected; otherwise, if it returns false, the update is allowed.
    * @param doc Local state of the document
    * @param update Incoming update
+   * @param socket Socket data (socket.data) may provide additional credentials data from middleware. Socket can be manually close on suspicious/ malicious actions
    */
-  rejectUpdate?: (doc: Document, update: Uint8Array) => Promise<boolean> | boolean
+  rejectUpdate?: (doc: Document, update: Uint8Array, socket: Socket) => Promise<boolean> | boolean
 
 }
 
@@ -207,7 +208,7 @@ export class YSocketIO extends Observable<string> {
     })
 
     socket.on('sync-update', async (update: Uint8Array) => {
-      if((this.configuration?.rejectUpdate) != null && await this.configuration.rejectUpdate(doc,update)) return
+      if((this.configuration?.rejectUpdate) != null && await this.configuration.rejectUpdate(doc,update,socket)) return
       Y.applyUpdate(doc, update, null)
     })
   }
@@ -264,7 +265,7 @@ export class YSocketIO extends Observable<string> {
    */
   private readonly startSynchronization = (socket: Socket, doc: Document): void => {
     socket.emit('sync-step-1', Y.encodeStateVector(doc), async (update: Uint8Array) => {
-      if((this.configuration?.rejectUpdate) != null && await this.configuration.rejectUpdate(doc,update)) return
+      if((this.configuration?.rejectUpdate) != null && await this.configuration.rejectUpdate(doc,update,socket)) return
       Y.applyUpdate(doc, new Uint8Array(update), this)
     })
     socket.emit('awareness-update', AwarenessProtocol.encodeAwarenessUpdate(doc.awareness, Array.from(doc.awareness.getStates().keys())))
